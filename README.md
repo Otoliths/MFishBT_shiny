@@ -16,7 +16,7 @@ The datasets and R scripts that support the findings of this study are openly av
 
 ### Citation
 
-Ding, L.D. et al., (202x). FishBT: a biotracking/biomarkers database of global migratory fish. (In preparation)
+Ding, L.D. et al., (202x). A global database of biogeochemical tags in migratory fish. (In preparation)
 
 ### Contribution
 
