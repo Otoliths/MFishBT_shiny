@@ -7,7 +7,7 @@ Biogeochemical tags (microchemical/bulk element and isotopic elements) is a usef
 
 <img src="image/interface.png" align="center" width="auto" />
 
-Graphical user interface for Fish and Biogeochemical Tags [FishBT](https://fish-ecology.shinyapps.io/fishbt) database.
+Graphical user interface for [FishBT](https://fish-ecology.shinyapps.io/fishbt) database.
 
 
 ### Data Availability
