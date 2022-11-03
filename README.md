@@ -1,5 +1,5 @@
 
-## **FishBT** (**Fish** **B**iogeochemical **T**ags) Database <img src="image/logo.png" align="right" width="250" />
+## **MFishBT** (**M**igratory **Fish** **B**iogeochemical **T**ags) Database <img src="image/logo.png" align="right" width="250" />
 
 ### Summary
 
@@ -7,17 +7,17 @@ Biogeochemical tags (microchemical/bulk element and isotopic elements) is a usef
 
 <img src="image/interface.png" align="center" width="auto" />
 
-Graphical user interface for [FishBT](https://fish-ecology.shinyapps.io/fishbt) database.
+Graphical user interface for [MFishBT](https://fish-ecology.shinyapps.io/mfishbt) database.
 
 
 ### Data Availability
 
-The datasets and R scripts that support the findings of this study are openly available at [**here**](https://github.com/Otoliths/FishBT_shiny/tree/main/paper_code). 
+The datasets and R scripts that support the findings of this study are openly available at [**here**](https://github.com/Otoliths/MFishBT_shiny/tree/main/paper_code). 
 
 ### Citation
 
-Ding, L.D. et al., (202x). A global database of biogeochemical tags in migratory fish. (In preparation)
+Ding, L.D. et al., (202x). MFishBT: A global database of biogeochemical tags in migratory fish. (In preparation)
 
 ### Contribution
 
-Adding new entries to the [**FishBT**](https://fish-ecology.shinyapps.io/fishbt) database (updated annually) is encouraged. Topright navbar of this database pull requests are the preferred means of making a contribution to the project.
+Adding new entries to the [**MFishBT**](https://fish-ecology.shinyapps.io/mfishbt) database (updated annually) is encouraged. Topright navbar of this database pull requests are the preferred means of making a contribution to the project.
