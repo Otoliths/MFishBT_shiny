@@ -1,5 +1,5 @@
 
-## **MFishBT** (**M**igratory **Fish** **B**iogeochemical **T**ags) Database <img src="image/logo.png" align="right" width="250" />
+## *MFishBT* (*M*igratory *Fish*’s *B*iogeochemical *T*ags) Database <img src="image/logo.png" align="right" width="250" />
 
 ### Summary
 
