@@ -1,0 +1,942 @@
+---
+title: "MFishBT Database"
+date: "Update: `r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows 
+    vertical_layout: fill
+    logo: logo.png
+    favicon: logo.png
+    social: menu
+    source_code: embed
+    navbar:
+      - {icon: "fa-question-circle",title: "Suggest a New Publication", href: "https://forms.gle/cjbhyPcUmybRWj577", align: right, target: _blank}
+      - {icon: "fa-github", href: "https://github.com/Otoliths/MFishBT_shiny", align: right, target: _blank}
+---
+
+```{r}
+
+library(flexdashboard)
+library(shiny)
+library(shinyWidgets)
+library(leaflet)
+library(leafem)
+library(leafsync)
+library(dplyr)
+library(leafgl)
+library(ggplot2)
+library(dplyr)
+library(magrittr) # extract2()
+library(crosstalk)
+library(DT)
+library(RColorBrewer)
+library(sp)
+library(sf)
+library(downloadthis)
+
+#Reading data
+#tag <- read.csv("metadata/MFishBT_tags_v1.csv")
+tag <- readRDS("metadata/MFishBT_tags_v1.rds")
+tag$Study_id <- ifelse(nchar(tag$Study_id) == 40,paste0("<a href='https://www.semanticscholar.org/paper/", tag$Study_id,"'>",tag$Study_id, "</a>"),tag$Study_id)
+tag[is.na(tag)] <- 'Unknown'
+tag$N_analysis <- as.numeric(tag$N_analysis)
+tag1 <- tag[which(tag$Tags_type == "Trace element"),]
+tag2 <- tag[which(tag$Tags_type == "Stable isotope"),]
+
+#df <- read.csv("metadata/MFishBT_geographical_records_v1.csv")
+df <- readRDS("metadata/MFishBT_geographical_records_v1.rds")
+df <- df %>% left_join(unique(tag[,c("Species","Taxonomy","Class_name","Order_name","Family_name","Migratory_behaviour")]), by = "Species")
+df$Ecosystem <- as.factor(df$Ecosystem)
+df1 <- df[which(df$Tags_type == "Trace element"),]
+df2 <- df[which(df$Tags_type == "Stable isotope"),]
+
+#edges <- read.csv("metadata/MFishBT_biological_archives_edge_v1.csv")
+edges <- readRDS("metadata/MFishBT_biological_archives_edge_v1.rds")
+mic_data <- edges[which(edges$Tags_type == "Trace element"),]
+mic_data <- mic_data[-which(is.na(mic_data$Longitude)),]
+iso_data <- edges[which(edges$Tags_type == "Stable isotope"),]
+```
+
+
+Trace element {data-navmenu="Map"}
+=====================================  
+
+Row 
+--------------
+### Occurrences {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(nrow(df1), big.mark = ","), "", sep = " "),
+  caption = "Field occurrences", icon = "fas fa-map-pin"
+)
+```
+
+### Studies {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(length(unique(df1$Study_id)), big.mark = ","), "", sep = " "),
+  caption = "Total number of studies", icon = "fas fa-file"
+)
+```
+
+### Species {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(length(unique(df1$Species)), big.mark = ","), "", sep = " "),
+  caption = "Total number of Species", icon = "fas fa-fish"
+)
+```
+
+### Tags {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(sum(as.numeric(tag1$N_analysis), na.rm = T), big.mark = ","), "", sep = " "),
+  caption = "Total number of biogeochemical tags", icon = "fas fa-fingerprint"
+)
+```
+
+Row {.tabset}
+--------------
+### Trace element
+
+```{r}
+get_popup <- function(df) {
+  paste(
+    sep = "<br/>",
+    paste("<font color='blue'><strong>Taxonomy: </strong></font>", df$Taxonomy),
+    paste("<font color='blue'><strong>Class_name: </strong></font>", df$Class_name),
+    paste("<font color='blue'><strong>Order_name: </strong></font>", df$Order_name),
+    paste("<font color='blue'><strong>Family_name: </strong></font>", df$Family_name),
+    paste("<font color='blue'><strong>Species: </strong></font>", "<i>", gsub("_", " ", df$Species), "</i>"),
+    paste("<font color='blue'><strong>Migratory behaviour: </strong></font>", df$Migratory_behaviour),
+    paste("<font color='blue'><strong>Tags type: </strong></font>", df$Tags_type),
+    paste("<font color='blue'><strong>Sampled date: </strong></font>", df$Sample_date),
+    paste("<font color='blue'><strong>FAO zone: </strong></font>", df$FAO_zone),
+    paste("<font color='blue'><strong>Ecosystem: </strong></font>", df$Ecosystem),
+    paste(
+      "<font color='blue'><strong>Semantic Scholar identifier: </strong></font>",
+      ifelse(nchar(df$Study_id) == 40, paste0("<b><a href='https://www.semanticscholar.org/paper/", df$Study_id, "'", " target='_blank'>", df$Study_id, "</a></b>"),df$Study_id))
+  )
+}
+
+
+markerLegendHTML <- function(IconSet) {
+  # container div:
+  legendHtml <- "<div style='padding: 10px; padding-bottom: 10px;'><h4 style='padding-top:0; padding-bottom:10px; margin: 0;'> <strong>FAO major fishing areas</strong> </h4>"
+
+  n <- 1
+  # add each icon for font-awesome icons icons:
+  for (Icon in IconSet) {
+    if (Icon[["library"]] == "fa") {
+      legendHtml <- paste0(
+        legendHtml, "<div style='width: auto; height: 45px'>",
+        "<div style='position: relative; display: inline-block; width: 36px; height: 45px' class='awesome-marker-icon-", Icon[["markerColor"]], " awesome-marker'>",
+        "<i style='margin-left: 8px; margin-top: 11px; 'class= 'fa fa-", Icon[["icon"]], " fa-inverse'></i>",
+        "</div>",
+        "<p style='position: relative; top: 15px; display: inline-block; ' >", names(IconSet)[n], "</p>",
+        "</div>"
+      )
+    }
+    n <- n + 1
+  }
+  paste0(legendHtml, "</div>")
+}
+
+
+IconSet <- awesomeIconList(
+  "Inland waters" = makeAwesomeIcon(icon = "ship", markerColor = "lightgreen", iconColor = "white", library = "fa"),
+  "Marine areas" = makeAwesomeIcon(icon = "ship", markerColor = "lightblue", iconColor = "white", library = "fa")
+)
+```
+
+  
+```{r}
+
+df1 <- split(df1, df1$Ecosystem)
+l <- leaflet(df1, width = "100%") %>%
+  setMaxBounds(-180, -90, 180, 90) %>%
+  setView(0, 20, zoom = 2) %>%
+  addTiles()
+
+names(df1) %>%
+  purrr::walk(function(i) {
+    l <<- l %>%
+      addAwesomeMarkers(
+        data = df1[[i]],
+        lng = ~Longitude, lat = ~Latitude,
+        popup = get_popup(df1[[i]]),
+        group = i,
+        icon = ~ IconSet[[i]],
+        clusterOptions = markerClusterOptions(),
+        clusterId = "quakesCluster",
+        labelOptions = labelOptions(noHide = F, direction = "auto")
+      )
+  })
+
+
+
+l %>%
+  addLayersControl(
+    # overlayGroups = names(df),
+    baseGroups = c("Base map", "TopoMap", "Satellite"),
+    options = layersControlOptions(collapsed = T)
+  ) %>%
+  addMouseCoordinates() %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Default") %>%
+  addProviderTiles(providers$OpenTopoMap, group = "TopoMap") %>%
+  addProviderTiles(providers$HERE.satelliteDay, group = "Satellite") %>%
+  hideGroup(df) %>%
+  addEasyButton(easyButton(
+    states = list(
+      easyButtonState(
+        stateName = "unfrozen-markers",
+        icon = "ion-toggle",
+        title = "Freeze Clusters",
+        onClick = JS("
+          function(btn, map) {
+            var clusterManager =
+              map.layerManager.getLayer('cluster', 'quakesCluster');
+            clusterManager.freezeAtZoom();
+            btn.state('frozen-markers');
+          }")
+      ),
+      easyButtonState(
+        stateName = "frozen-markers",
+        icon = "ion-toggle-filled",
+        title = "UnFreeze Clusters",
+        onClick = JS("
+          function(btn, map) {
+            var clusterManager =
+              map.layerManager.getLayer('cluster', 'quakesCluster');
+            clusterManager.unfreeze();
+            btn.state('unfrozen-markers');
+          }")
+      )
+    )
+  )) %>%
+  addMiniMap(
+    tiles = providers$OpenStreetMap.Mapnik,
+    toggleDisplay = TRUE
+  ) %>%
+  addControl(html = markerLegendHTML(IconSet = IconSet), position = "bottomleft")
+```
+
+Stable isotope {data-navmenu="Map"}
+=====================================  
+
+Row 
+--------------
+### Occurrences {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(nrow(df2), big.mark = ","), "", sep = " "),
+  caption = "Field occurrences", icon = "fas fa-map-pin"
+)
+```
+
+### Studies {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(length(unique(df2$Study_id)), big.mark = ","), "", sep = " "),
+  caption = "Total number of studies", icon = "fas fa-file"
+)
+```
+
+### Species {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(length(unique(df2$Species)), big.mark = ","), "", sep = " "),
+  caption = "Total number of Species", icon = "fas fa-fish"
+)
+```
+
+### Tags {.value-box,.mobile}
+```{r}
+valueBox(
+  value = paste(format(sum(as.numeric(tag2$N_analysis), na.rm = T), big.mark = ","), "", sep = " "),
+  caption = "Total number of biogeochemical tags", icon = "fas fa-fingerprint"
+)
+```
+
+Row {.tabset}
+--------------
+
+### Stable isotope
+  
+```{r}
+
+df2 <- split(df2, df2$Ecosystem)
+l <- leaflet(df2, width = "100%") %>%
+  setMaxBounds(-180, -90, 180, 90) %>%
+  setView(0, 20, zoom = 2) %>%
+  addTiles()
+
+names(df2) %>%
+  purrr::walk(function(i) {
+    l <<- l %>%
+      addAwesomeMarkers(
+        data = df2[[i]],
+        lng = ~Longitude, lat = ~Latitude,
+        popup = get_popup(df2[[i]]),
+        group = i,
+        icon = ~ IconSet[[i]],
+        clusterOptions = markerClusterOptions(),
+        clusterId = "quakesCluster",
+        labelOptions = labelOptions(noHide = F, direction = "auto")
+      )
+  })
+
+
+l %>%
+  addLayersControl(
+   #overlayGroups = names(df2),
+    baseGroups = c("Base map", "TopoMap", "Satellite"),
+    options = layersControlOptions(collapsed = T)
+  ) %>%
+  addMouseCoordinates() %>%
+  addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Default") %>%
+  addProviderTiles(providers$OpenTopoMap, group = "TopoMap") %>%
+  addProviderTiles(providers$HERE.satelliteDay, group = "Satellite") %>%
+  hideGroup(df) %>%
+  addEasyButton(easyButton(
+    states = list(
+      easyButtonState(
+        stateName = "unfrozen-markers",
+        icon = "ion-toggle",
+        title = "Freeze Clusters",
+        onClick = JS("
+          function(btn, map) {
+            var clusterManager =
+              map.layerManager.getLayer('cluster', 'quakesCluster');
+            clusterManager.freezeAtZoom();
+            btn.state('frozen-markers');
+          }")
+      ),
+      easyButtonState(
+        stateName = "frozen-markers",
+        icon = "ion-toggle-filled",
+        title = "UnFreeze Clusters",
+        onClick = JS("
+          function(btn, map) {
+            var clusterManager =
+              map.layerManager.getLayer('cluster', 'quakesCluster');
+            clusterManager.unfreeze();
+            btn.state('unfrozen-markers');
+          }")
+      )
+    )
+  )) %>%
+  addMiniMap(
+    tiles = providers$OpenStreetMap.Mapnik,
+    toggleDisplay = TRUE
+  ) %>%
+  addControl(html = markerLegendHTML(IconSet = IconSet), position = "bottomleft")
+```
+
+
+Table
+===================================== 
+
+```{r}
+rowCallback <- c(
+  "function(row, data){",
+  "  for(var i=0; i<data.length; i++){",
+  "    if(data[i] === 'Unknown'){",
+  "      $('td:eq('+i+')', row).html('NA')",
+  "        .css({'color': 'rgb(151,151,151)', 'font-style': 'italic'});",
+  "    }",
+  "  }",
+  "}"
+)
+datatable(tag,
+  escape = FALSE,
+  extensions = c("FixedColumns", "Buttons"), # "Scroller"
+  caption = htmltools::tags$caption(
+    style = "caption-side: bottom; text-align: center;",
+    "Note: ", htmltools::em("We abbreviate character strings that are wider than 20 characters using the first 20 characters plus an ellipsis (…), and the full character string will be displayed as a tooltip when you mouse over the cell.")
+  ),
+  options = list(
+    scrollX = TRUE,
+    paging = TRUE, ## paginate the output
+    pageLength = 100,
+    lengthChange = FALSE,
+    dom = 'Bfltip',
+    buttons = list(list(
+                  extend = 'collection',
+                  buttons = list(list(extend='csv',filename = paste("MFishBT_tags",Sys.Date(),sep = "_")),
+                                 list(extend='excel',filename = paste("MFishBT_tags",Sys.Date(),sep = "_"))),
+                  text = 'Download'
+                )),
+    rowCallback = JS(rowCallback),
+    columnDefs = list(
+      list(
+        targets = c(18,19,20,22,26),#seq_along(tag)[-1],#c(19, 20, 22, 26),
+        render = JS(
+          "function(data, type, row, meta) {",
+          "return type === 'display' && data.length > 20 ?",
+          "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+          "}"
+        )
+      ),
+      list(targets = "_all", className = "dt-body_left")
+    ),
+    fixedColumns = list(leftColumns = 2),
+    filter = "top",
+    # order = list(2, "desc"),
+    searchHighlight = TRUE,
+    initComplete = JS(
+      "function(settings, json) {",
+      "$(this.api().table().header()).css({'background-color': '#ccc', 'color': '#000'});",
+      "}"
+    )
+  ), filter = "top"
+) %>%
+  formatStyle(
+    "Study_id",
+    color = "Black",
+    fontWeight = "bold"
+  ) %>%
+  formatStyle(
+    "Species",
+    color = "Black", fontWeight = "italic"
+  )
+```
+
+
+
+Chemoscapes {data-navmenu="Biogeochemical atlases"}
+=====================================  
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+selectInput("trace_element",
+  label = h4("Select a trace element"),
+  unique(mic_data$Element_ratio),
+  selected = "Sr/Ca"
+)
+```
+
+`MFishBT` represents an authoritative geo-referenced dataset to serve various needs of biogeochemical research, such as mapping multi-element chemoscapes /isoscapes, reconstruction of migratory fish routes, and future comparison in biologging and biotelemetry approaches and beyond. 
+
+`Note:` *We abbreviate character strings that are wider than 20 characters using the first 20 characters plus an ellipsis (…), and the full character string will be displayed as a tooltip when you mouse over the cell.*
+
+Row
+-----------------------------------------------------------------------
+
+### Chemoscapes
+    
+```{r}
+selectedData_mic <- reactive({
+  dat <- mic_data[mic_data$Element_ratio == input$trace_element, ]
+  dat <- SpatialPointsDataFrame(
+    SpatialPoints(dat[, c("Longitude", "Latitude")]),
+    dat
+  )
+  dat
+})
+
+
+map1 <- renderLeaflet({
+  pal1 <- colorNumeric(rev(brewer.pal(11, "Spectral")), selectedData_mic()$Mean_value, na.color = NA)
+
+  map <- leaflet(width = "100%") %>%
+    setMaxBounds(-180, -90, 180, 90) %>%
+    setView(0, 20, zoom = 2) %>%
+    addLayersControl(
+      # overlayGroups = names(df2),
+      baseGroups = c("Base map", "TopoMap", "Satellite"),
+      options = layersControlOptions(collapsed = T)
+    ) %>%
+    addMouseCoordinates() %>%
+    addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Default") %>%
+    addProviderTiles(providers$OpenTopoMap, group = "TopoMap") %>%
+    addProviderTiles(providers$HERE.satelliteDay, group = "Satellite") %>%
+    hideGroup(selectedData_mic()) %>%
+    addCircleMarkers(
+      data = selectedData_mic(),
+      lng = ~Longitude,
+      lat = ~Latitude,
+      color = pal1(selectedData_mic()$Mean_value),
+      radius = 5,
+      fill = T,
+      fillOpacity = 0.2,
+      opacity = 0.6,
+      popup = paste(
+        sep = "<br/>",
+        paste("<font color='blue'><strong>Species: </strong></font>", "<i>", gsub("_", " ", selectedData_mic()$Species), "</i>"),
+        paste("<font color='blue'><strong>Biological archives: </strong></font>", selectedData_mic()$Biological_archives),
+        paste("<font color='blue'><strong>", input$trace_element, ": </strong></font>", selectedData_mic()$Mean_value),
+        paste("<font color='blue'><strong>Sampled date: </strong></font>", selectedData_mic()$Sample_date),
+        paste(
+          "<font color='blue'><strong>Semantic Scholar identifier: </strong></font>",
+          ifelse(nchar(selectedData_mic()$Study_id) == 40, paste0("<b><a href='https://www.semanticscholar.org/paper/", selectedData_mic()$Study_id, "'", " target='_blank'>", selectedData_mic()$Study_id, "</a></b>"), selectedData_mic()$Study_id)
+        )
+      )
+    ) %>%
+    addLegend(
+      pal = pal1,
+      values = selectedData_mic()$Mean_value,
+      title = input$trace_element,
+      labFormat = labelFormat(digits = 6)
+    )
+  map
+})
+
+leafletOutput("map1")
+
+```
+
+
+Row {.tabset}
+-----------------------------------------------------------------------
+   
+### Table
+
+```{r}
+selectedData_mic2 <- reactive({
+  mic_data$Study_id <- ifelse(nchar(mic_data$Study_id) == 40,paste0("<a href='https://www.semanticscholar.org/paper/", mic_data$Study_id,"'>", mic_data$Study_id, "</a>"),mic_data$Study_id)
+  mic_data[is.na(mic_data)] <- ' '
+  subset(mic_data, mic_data$Element_ratio == input$trace_element)
+})
+
+rowCallback <- c(
+  "function(row, data){",
+  "  for(var i=0; i<data.length; i++){",
+  "    if(data[i] === ' '){",
+  "      $('td:eq('+i+')', row).html('NA')",
+  "        .css({'color': 'rgb(151,151,151)', 'font-style': 'italic'});",
+  "    }",
+  "  }",
+  "}"
+)
+renderDT(
+  selectedData_mic2(),
+  escape = FALSE,
+  extensions = c("FixedColumns", "Buttons"), 
+  options = list(
+    paging = TRUE, ## paginate the output
+    pageLength = 100,
+                lengthChange = FALSE,
+                dom = 'Bfltip',
+                buttons = list(list(
+                  extend = 'collection',
+                  buttons = list(list(extend='csv',filename = paste("MFishBT_chemoscapes",input$trace_element,Sys.Date(),sep = "_")),
+                                 list(extend='excel',filename = paste("MFishBT_chemoscapes",input$trace_element,Sys.Date(),sep = "_"))),
+                  text = 'Download'
+                )),
+    scrollX = TRUE,
+    rowCallback = JS(rowCallback),
+    columnDefs = list(
+      list(
+        targets = seq_along(selectedData_mic2())[-1],
+        render = JS(
+          "function(data, type, row, meta) {",
+          "return type === 'display' && data.length > 20 ?",
+          "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+          "}"
+        )
+      ),
+      list(targets = "_all", className = "dt-body_left")
+    ),
+    fixedColumns = list(leftColumns = 2),
+    filter = "top",
+    searchHighlight = TRUE,
+    initComplete = JS(
+      "function(settings, json) {",
+      "$(this.api().table().header()).css({'background-color': '#ccc', 'color': '#000'});",
+      "}"
+    )
+  ), filter = "top"
+)
+```
+
+
+Isoscapes {data-navmenu="Biogeochemical atlases"}
+=====================================  
+
+Inputs {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+selectInput("isotopic_element",
+  label = h4("Select a isotopic element"),
+  unique(iso_data$Element_ratio),
+  selected = "Sr8786"
+)
+```
+
+`MFishBT` represents an authoritative geo-referenced dataset to serve various needs of biogeochemical research, such as mapping multi-element chemoscapes /isoscapes, reconstruction of migratory fish routes, and future comparison in biologging and biotelemetry approaches and beyond. 
+
+`Note:` *We abbreviate character strings that are wider than 20 characters using the first 20 characters plus an ellipsis (…), and the full character string will be displayed as a tooltip when you mouse over the cell.*
+
+
+Row
+-----------------------------------------------------------------------
+
+### Isoscapes
+    
+```{r}
+selectedData_iso <- reactive({
+  dat <- iso_data[iso_data$Element_ratio == input$isotopic_element, ]
+  dat <- SpatialPointsDataFrame(
+    SpatialPoints(dat[, c("Longitude", "Latitude")]),
+    dat
+  )
+  dat
+})
+
+map2 <- renderLeaflet({
+  pal2 <- colorNumeric(rev(brewer.pal(11, "Spectral")), selectedData_iso()$Mean_value, na.color = NA)
+
+  map <- leaflet(width = "100%") %>%
+    setMaxBounds(-180, -90, 180, 90) %>%
+    setView(0, 20, zoom = 2) %>%
+    addLayersControl(
+      baseGroups = c("Base map", "TopoMap", "Satellite"),
+      options = layersControlOptions(collapsed = T)
+    ) %>%
+    addMouseCoordinates() %>%
+    addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Default") %>%
+    addProviderTiles(providers$OpenTopoMap, group = "TopoMap") %>%
+    addProviderTiles(providers$HERE.satelliteDay, group = "Satellite") %>%
+    hideGroup(selectedData_iso()) %>%
+    addCircleMarkers(
+      data = selectedData_iso(),
+      lng = ~Longitude,
+      lat = ~Latitude,
+      color = pal2(selectedData_iso()$Mean_value),
+      radius = 5,
+      fill = T,
+      fillOpacity = 0.2,
+      opacity = 0.6,
+      popup = paste(
+        sep = "<br/>",
+        paste("<font color='blue'><strong>Species: </strong></font>", "<i>", gsub("_", " ", selectedData_iso()$Species), "</i>"),
+        paste("<font color='blue'><strong>Biological archives: </strong></font>", selectedData_iso()$Biological_archives),
+        paste("<font color='blue'><strong>", input$isotopic_element, ": </strong></font>", selectedData_iso()$Mean_value),
+        paste("<font color='blue'><strong>Sampled date: </strong></font>", selectedData_iso()$Sample_date),
+        paste(
+          "<font color='blue'><strong>Semantic Scholar identifier: </strong></font>",
+          ifelse(nchar(selectedData_iso()$Study_id) == 40, paste0("<b><a href='https://www.semanticscholar.org/paper/", selectedData_iso()$Study_id, "'", " target='_blank'>", selectedData_iso()$Study_id, "</a></b>"), selectedData_iso()$Study_id)
+        )
+      )
+    ) %>%
+    addLegend(
+      pal = pal2,
+      values = selectedData_iso()$Mean_value,
+      title = input$isotopic_element,
+      labFormat = labelFormat(digits = 6)
+    )
+  map
+})
+
+leafletOutput("map2")
+```
+
+
+Row {.tabset}
+-----------------------------------------------------------------------
+   
+### Table
+
+```{r}
+selectedData_iso2 <- reactive({
+  iso_data$Study_id <- ifelse(nchar(iso_data$Study_id) == 40,paste0("<a href='https://www.semanticscholar.org/paper/", iso_data$Study_id,"'>",iso_data$Study_id, "</a>"),iso_data$Study_id)
+  iso_data[is.na(iso_data)] <- ' '
+  subset(iso_data, iso_data$Element_ratio == input$isotopic_element)
+})
+
+rowCallback <- c(
+  "function(row, data){",
+  "  for(var i=0; i<data.length; i++){",
+  "    if(data[i] === ' '){",
+  "      $('td:eq('+i+')', row).html('NA')",
+  "        .css({'color': 'rgb(151,151,151)', 'font-style': 'italic'});",
+  "    }",
+  "  }",
+  "}"
+)
+renderDT(
+  selectedData_iso2(),
+  escape = FALSE,
+  extensions = c("FixedColumns", "Buttons"), 
+  options = list(
+    paging = TRUE, ## paginate the output
+    pageLength = 100,
+                lengthChange = FALSE,
+                dom = 'Bfltip',
+                buttons = list(list(
+                  extend = 'collection',
+                  buttons = list(list(extend='csv',filename = paste("MFishBT_isoscapes",input$isotopic_element,Sys.Date(),sep = "_")),
+                                 list(extend='excel',filename = paste("MFishBT_isoscapes",input$isotopic_element,Sys.Date(),sep = "_"))),
+                  text = 'Download'
+                )),
+    scrollX = TRUE,
+    rowCallback = JS(rowCallback),
+    columnDefs = list(
+      list(
+        targets = seq_along(selectedData_iso2())[-1],
+        render = JS(
+          "function(data, type, row, meta) {",
+          "return type === 'display' && data.length > 20 ?",
+          "'<span title=\"' + data + '\">' + data.substr(0, 20) + '...</span>' : data;",
+          "}"
+        )
+      ),
+      list(targets = "_all", className = "dt-body_left")
+    ),
+    fixedColumns = list(leftColumns = 2),
+    filter = "top",
+    searchHighlight = TRUE,
+    initComplete = JS(
+      "function(settings, json) {",
+      "$(this.api().table().header()).css({'background-color': '#ccc', 'color': '#000'});",
+      "}"
+    )
+  ), filter = "top"
+)
+```
+
+About {data-navmenu="About"}
+===================================== 
+
+**MFishBT** (**M**igratory **Fish** **B**iogeochemical **T**ags) Database <img src="MFishBT_team.png" align="right" width="500" />
+  
+**Summary**
+
+Biogeochemical tags (trace elements and stable isotopes) are a useful tool for tracking fish movements globally. This site provides a comprehensive database of peer-reviewed literature available on global trends in migratory fish tracking with biogeochemical approaches. These studies have been compiled through an extensive, systematic primary literature review to identify peer-reviewed journal publications and documented examples of biogeochemical tags on migratory fish globally. From this standardized database of existing literature, which make it easy for researchers and managers to query taxonomic groups, migration categories, tag types, elements, biological archives, or geographic locations to obtain summary information on the application of biogeochemical tags. Additionally, the `MFishBT` database is updatable and provides access to comprehensive published information to inform the conservation and management of migratory fishes. 
+
+
+**Contributions**
+
+Adding new entries to the `MFishBT` database (updated periodically) is encouraged. Topright navbar pull requests are the preferred means of making a contribution to the project.
+Any comments and suggestions, please contact us at ly_ding@126.com or chzhding@ynu.edu.cn.
+
+
+**Acknowledgements**
+
+The `MFishBT` database was made possible by leveraging integral R packages including `flexdashboard`, `leaflet`, `dplyr`, `DT` and many others.
+
+We thank Lu Yang, Yan Wang, Duowen Chen, Jie Wang, Yaya Qian, Mingbo Li and Xiaomin Gao from Yunnan University for data collection. This work was funded by the National Natural Science Foundation of China grant `42271066`, the Second Tibetan Plateau Scientific Expedition and Research (STEP) Program, China grant `2019QZKK0304-02`, Yunnan Scientist Workstation on International River Research of Daming He (`KXJGZS-2019-005`), and the Educational Committee Foundation of Yunnan Province of China grant `2021Y014`.
+
+**Visit tracker**
+
+<script type="text/javascript" src="//rf.revolvermaps.com/0/0/4.js?i=5nlgqt6nf7g&amp;m=7&amp;h=256&amp;c=ff0000&amp;r=20" async="async"></script>
+
+
+Procedure {data-navmenu="About"}
+===================================== 
+
+**Literature Search**
+
+We conducted a systematic literature search to identify peer-reviewed studies of migratory fish using biogeochemical tags (i.e., trace elements and stable isotopes) in Web of Science and Scopus. The search string was based on the inclusion of two keyword groups: (1) targeted migratory fishes (i.e., scientific names) and (2) biogeochemical tags. The search string design followed the methods proposed in previous studies ([Grames et al., 2019](https://doi.org/10.1111/2041-210X.13268); [Foo et al., 2021](https://doi.org/10.1111/2041-210X.13654)). The full search terms used were ("*Aaptosyax grypus*" OR "*Abalistes stellaris*" OR "*Ablennes hians*" OR “…” OR "*Zungaro zungaro*") AND (microchemi* OR “chemical signa\*” OR geochemi\* OR biochemi* OR biogeochemi* OR isotop* OR “trace element\*” OR “trace metal\*” OR “natural tag\*” OR “natal tag\*” OR fingerprint\*). The Latin names and migration categories of all migratory fish species were sourced from [FishBase](http://www.fishbase.org/).
+
+
+**Literature Selection Criteria**
+
+Literature screening was performed mainly through Microsoft Excel with Visual Basic screening buttons (e.g. `Include`, `Exclude`, and `Maybe`; [Lajeunesse, 2021](https://doi.org/10.6084/m9.figshare.14179655)). The deduplicated documents that were not related to Actinopterygii migratory fish species, elements or isotopic ratios were excluded based on their titles, abstracts and keywords. Full texts were screened to exclude inappropriate papers based on the following criteria: 1) laboratory experiments/reared, 2) uncertain scientific name (e.g., *Oncorhynchus* spp.) or nonmigratory fish, 3) topics about trophic ecology or bioaccumulation, and 4) inaccessible literature. Two independent reviewers simultaneously conducted the screening. Documents were excluded only if agreements were reached; otherwise, the documents were retained for the next step of filtering. In addition, complementary case studies identified among the references of related review articles were added. 
+
+
+**Major fields used by the MFishBT**
+  
+- **Study_id**	[*Semantic Scholar*](https://www.semanticscholar.org) identifier, is usually used to traverse the literature graph of a paper's information using [*S2miner*](https://github.com/Otoliths/S2miner) R package.
+- **Species** Scientific name of the species.
+- **Class_name** Class name of the species.
+- **Order_name** Order_name of the species.
+- **Family_name** Family name of the species.
+- **Migratory_behaviour** Migratory categories.
+- **Biological_archives** Biomineral archives (i.e., fin ray, scale, otolith, vertebra, tooth, muscle, eye lens, and others) used in biogeochemical analysis.
+- **Tags_type** Type of biogeochemical tag (i.e., trace elements and isotopic ratios).
+- **N_analysis** Sample size tested.
+- **Life_stage** Life history stage (i.e., egg, larva, juvenile, adult, and mixed).
+- **Analysis_type** Analysis type used in biogeochemical analysis.
+- **Element_composition**	Microchemical or isotopic elements tested in fish biological archives. Microchemical or isotopic elements tested in fish biological archives. Multiple elements separated by semicolons. The properties of the elements were available from https://periodictable.com/.
+- **Rawdata_name** Raw data name of biomineral archives core-to-edge transect datasets for migratory fish, see [*MFishBTdat*](https://github.com/Otoliths/MFishBTdat) R package.
+- **Fish_id** Fish identifier of each individual fish provided by the authors.
+- **Location_biological_archives** Location of biomineral archives (e.g., otolith edge) detected in biogeochemical analysis.
+- **Element_ratio** Biogeochemical elements tested in fish biological archives.
+- **Mean_value** Mean value detected in fish biological archives. Dimensionless unit in bulk elements (E: Ca) and isotope ratio (unit: ‰).
+- **Error** Error value detected in fish biological archives. Dimensionless unit in bulk elements (E: Ca) and isotope ratio (unit: ‰).
+- **Error_type** Type of error, i.e. standard error (SE) and standard deviation (SD).
+- **Latitude**	Geographical latitude in decimal degrees (WGS84) of the record location.
+- **Longitude**	Geographical longitude in decimal degrees (WGS84) of the record location.
+- **FAO_zone**	Sample zone based on Food and Agriculture Organization. The zonation of major fishing areas was sourced from https://www.fao.org.
+- **Ecosystem**	Sample ecosystem based on Food and Agriculture Organization. The zonation of major fishing areas was sourced from https://www.fao.org. (i.e., inland waters and marine areas).
+- **Sample_date**	Year of sample collection.
+- **Publication_date**	Year of publication.
+- **Reference** Reference for each record with APA style.
+- .......
+
+
+**References**
+
+- Foo, Y. Z., O'Dea, R. E., Koricheva, J., Nakagawa, S., & Lagisz, M. (2021). [A practical guide to question formation, systematic searching and study screening for literature reviews in ecology and evolution](https://doi.org/10.1111/2041-210X.13654). *Methods in Ecology and Evolution*, 12(9), 1705–1720. 
+- Grames, E. M., Stillman, A. N., Tingley, M. W., & Elphick, C. S. (2019). [An automated approach to identifying search terms for systematic reviews using keyword co‐occurrence network](https://doi.org/10.1111/2041-210X.13268). *Methods in Ecology and Evolution*, 10(10), 1645–1654. 
+- Lajeunesse, M.J. (2021). [Screening studies with Microsoft Excel for systematic reviews and meta-analysis](https://doi.org/10.6084/m9.figshare.14179655). *Figshare*. Online resource. 
+
+
+News
+===================================== 
+
+**News in database `MFishBT`**
+
+- *2022-04-27*  Initial release `MFishBT` database 
+- *2023-04-01*  Add three class: Chondrichthyes, Cephalaspidomorphi, and Sarcopterygii  
+
+Submit Data
+===================================== 
+Column {.tabset data-height=95%}
+-----------------------------------------------------------------------
+**Submit data to MFishBT**
+
+We welcome contributions of new datasets to the **MFishBT** Database. For each dataset, there must be a citable reference, ideally in a peer-reviewed journal or publication. Standard Operating Procedure (SOP) for contributing datasets to the **MFishBT**, you have a couple of options:
+
+
+### **Option 1: Google Form Submission**
+
+```{r,echo=FALSE}
+library(shiny)
+library(shinyWidgets)
+actionButton(inputId='ab1', label="Suggest a New Publication", 
+             icon = icon("question-circle",verify_fa = FALSE), 
+             class = "btn-primary btn-lg",
+             style='padding:6px; font-size:110%',
+             onclick ="window.open('https://forms.gle/cjbhyPcUmybRWj577', '_blank')")
+```
+
+#### 1. Access the Submission Form:
+* Click on the "Suggest a New Publication" button on the MFishBT Database website.
+* This will open a Google Form for submitting publication information.
+
+#### 2. Enter Publication Details:
+* Fill in the required fields in the Google Form, including:
+   + Authors' email
+   + Title of the publication
+   + Authors' names
+   + Journal or publication name
+   + Publication date
+   + Abstract or summary of the publication
+   + Any relevant DOI or other identifiers
+   + ...
+
+#### 3. Submit the Form:
+* Review the entered information to ensure accuracy.
+* Submit the Google Form.
+
+#### 4. Review and Inclusion:
+* The MFishBT Database team will review the provided information.
+* If the publication meets the criteria, it will be considered for inclusion in the database with appropriate citations.
+
+
+
+### **Option 2: GitHub Submission**
+
+```{r,echo=FALSE}
+library(shiny)
+library(shinyWidgets)
+actionButton(inputId='ab1', 
+             label="Contribute a New Datasets", 
+             icon = icon("question-circle",verify_fa = FALSE), 
+             class = "btn-primary btn-lg",
+             style='padding:6px; font-size:110%',
+            onclick ="window.open('https://github.com/Otoliths/MFishBTdat', '_blank')")
+```
+
+#### 1. Access the Contribution Workflow:
+* Click on the "Contribute a New Dataset" button on the MFishBTdat package website.
+* This will direct you to the contribution workflow on GitHub.
+
+#### 2. Prepare Your Data:
+* Follow the data preparation guidelines provided in the GitHub repository: [MFishBTdat Contribution Guidelines](https://github.com/Otoliths/MFishBTdat).
+* Ensure your dataset adheres to the required format and quality standards.
+* Place the raw data (in a non-binary format, including two files `bt.<author>.<year>.<ext>` and `bt.<author>.<year>.r`) in the `data-raw` directory. The file should be named `bt.<author>.<year>.<ext>`, where `<author>` is the last name of the first author of the publication from which the data come, `<year>` is the publication year, and `<ext>` is the file extension (e.g., `.txt`, `.csv`, `.rds`).
+
+#### 3. Fork the Repository:
+* If you are not already familiar with Git and GitHub, consider learning the basics.
+* Fork the MFishBTdat GitHub repository to your own GitHub account.
+
+#### 4. Create a New Branch:
+* Create a new branch in your forked repository to work on your dataset contribution.
+
+#### 5. Upload Your Dataset:
+* Add your prepared dataset files to the `data-raw` directory within your branch.
+* Ensure the files are correctly named and organized.
+
+#### 6. Submit a Pull Request:
+* Create a pull request (PR) from your branch to the main repository's master branch.
+* Provide a clear and informative description of your dataset and the changes you've made.
+
+#### 7. Review and Feedback:
+* The MFishBTdat team and the community will review your dataset contribution.
+* Address any feedback or suggestions provided during the review process.
+
+#### 8. Inclusion in the MFishBTdat:
+* Once your dataset is approved, it will be merged into the main repository and included in the [MFishBTdat](https://github.com/Otoliths/MFishBTdat) package.
+
+
+### **Option 3: Email Submission**
+
+```{r}
+## One file example
+downloadthis::download_file(
+  path = "MFishBT_template.zip",
+  output_name = "MFishBT_template",
+  output_extension = ".zip",
+  button_label = "Download MFishBT template",
+  button_type = "primary",
+  has_icon = TRUE,
+  icon = "fa fa-save",
+  self_contained = FALSE
+)
+actionButton("helpBtn", "Contact",
+             icon = icon("users",verify_fa = FALSE),
+             class = "btn-primary btn-lg",
+             style='padding:6px; font-size:140%')
+observeEvent(input$helpBtn, {
+sendSweetAlert(session, 
+               title = "For corrections and concerns", 
+               text = "Please email us at ly_ding@126.com or chzhding@ynu.edu.cn",
+               type = "info")})
+
+
+```
+
+#### 1. Download the MFishBT Template:
+* Visit the MFishBT Database website to download the provided dataset template.We are looking for (ideally) records that contain:
+  + Biogeochemical elements detected in fish biological archives
+  + Fish sampling information
+  + Biogeochemical value detected in fish biological archives
+
+#### 2. Prepare Your Data:
+* Follow the guidelines in the template for formatting and organizing your dataset.
+
+#### 3. Complete the Template:
+* Fill in the template with your dataset information, including metadata and references.
+
+#### 4. Submit via Email:
+* Attach the completed template to an email.
+* Send the email to the designated MFishBT Database submission address (chzhding@ynu.edu.cn or ly_ding@126.com).
+
+#### 5. Review and Inclusion:
+* The MFishBT Database team will review your submitted dataset and associated information.
+* If the dataset meets the criteria, it will be included in the database with proper citations.
+
+
+Row {data-height=5%}
+-------------------------------------
+<font color='blue'><strong>Please note</strong></font> that the MFishBT Database team reserves the right to review and assess all submissions to ensure they meet quality and relevance criteria. It's recommended to review the specific submission guidelines and requirements available on the MFishBT Database website or [MFishBTdat](https://github.com/Otoliths/MFishBTdat) package GitHub repository before submitting any contributions.
+
+
+```{r eval=FALSE}
+rsconnect::deployApp(getwd())
+```
+
+
+---
+<style>
+.navbar, [data-toggle=tab], .navbar-brand  {color:white;}
+
+.navbar-logo img {width: 100px; margin-top: 5px; margin-left: 0px;}
+</style>
