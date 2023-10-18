@@ -15,7 +15,7 @@ jobs:
       - name: Install rmarkdown
         run: Rscript -e 'install.packages("rmarkdown")'
       - name: Render README
-        run: Rscript -e 'rmarkdown::render("index.Rmd")'
+        run: Rscript -e 'rmarkdown::render("index.Rmd",output_dir = "docs")'
       - name: Commit results
         run: |
           git commit README.md -m 'Re-build index.Rmd' || echo "No changes to commit"
