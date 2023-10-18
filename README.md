@@ -1,4 +1,4 @@
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7277802.svg)](https://doi.org/10.5281/zenodo.7277802)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.8418722.svg)](https://doi.org/10.5281/zenodo.8418722)
 
 ## *MFishBT* (*M*igratory *Fish*’s *B*iogeochemical *T*ags) Database <img src="image/logo.png" align="right" width="250" />
 
