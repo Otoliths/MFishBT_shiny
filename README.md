@@ -8,7 +8,7 @@ Humans have long been fascinated by the mysteries surrounding fish migrations, a
 
 <img src="image/interface.png" align="center" width="auto" />
 
-Graphical user interface for [MFishBT](https://fish-ecology.shinyapps.io/mfishbt) database.
+Graphical user interface for [MFishBT](https://otoliths.github.io/MFishBT_shiny/index.html) database.
 
 
 ### Data Availability
@@ -21,4 +21,4 @@ Ding, L.D. et al., (202x). MFishBT: A global database of biogeochemical tags in 
 
 ### Contribution
 
-Adding new entries to the [**MFishBT**](https://fish-ecology.shinyapps.io/mfishbt) database (updated annually) is encouraged. Topright navbar of this database pull requests are the preferred means of making a contribution to the project.
+Adding new entries to the [**MFishBT**](https://otoliths.github.io/MFishBT_shiny/index.html) database (updated annually) is encouraged. Topright navbar of this database pull requests are the preferred means of making a contribution to the project.
