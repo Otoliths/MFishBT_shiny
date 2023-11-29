@@ -22,3 +22,6 @@ Ding, L.D. et al., (202x). MFishBT: A global database of biogeochemical tags in 
 ### Contribution
 
 Adding new entries to the [**MFishBT**](https://otoliths.github.io/MFishBT_shiny/index.html) database (updated annually) is encouraged. Topright navbar of this database pull requests are the preferred means of making a contribution to the project.
+
+### Visitor Count
+![Visitor Count](https://profile-counter.glitch.me/MFishBT_shiny/count.svg)
